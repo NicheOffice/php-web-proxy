@@ -53,7 +53,7 @@ class HeaderRewritePlugin extends AbstractPlugin {
 		if(!$response->headers->has('content-disposition')){
 			
 			$url_path = parse_url($request_url, PHP_URL_PATH);
-			$filename = basename($url_path);
+			$filename = basename((string)$url_path);
 			
 			$response->headers->set('Content-Disposition', 'filename="'.$filename.'"');
 		}

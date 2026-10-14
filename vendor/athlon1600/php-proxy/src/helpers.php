@@ -4,7 +4,28 @@ use Proxy\Config;
 
 // strip away extra parameters text/html; charset=UTF-8
 function clean_content_type($content_type){
-	return trim(preg_replace('@;.*@', '', $content_type));
+	return trim(preg_replace('@;.*@', '', (string)$content_type));
+}
+
+
+if(!function_exists('starts_with')){
+	
+	function starts_with($haystack, $needles){
+		foreach( (array)$needles as $n){
+			if($n !== '' && stripos($haystack, $n) === 0){
+				return true;
+			}
+		}
+		
+		return false;
+	}
+}
+
+if(!function_exists('str_before')){
+	
+	function str_before($subject, $search){
+		return $search === '' ? $subject : explode($search, $subject)[0];
+	}
 }
 
 function is_html($content_type){
@@ -57,26 +78,26 @@ function str_rot_pass($str, $key, $decrypt = false){
 			$ascii = ord($str[$i]) + ord($key[$i % $key_len]);
 		}
 	
-		$result[$i] = chr($ascii);
+		$result[$i] = chr((($ascii % 256) + 256) % 256);
 	}
 	
 	return $result;
 }
 
 function app_url(){
-	return (!empty($_SERVER['HTTPS']) ? 'https://' : 'http://').$_SERVER['HTTP_HOST'].$_SERVER['PHP_SELF'];
+	if(Config::get('app_url')){
+		return Config::get('app_url');
+	}
+	else{
+		return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https://' : 'http://').$_SERVER['HTTP_HOST'].$_SERVER['SCRIPT_NAME'];
+	}
 }
 
 function render_string($str, $vars = array()){
-
 	preg_match_all('@{([a-z0-9_]+)}@s', $str, $matches, PREG_SET_ORDER);
 	
 	foreach($matches as $match){
-	
-		extract($vars, EXTR_PREFIX_ALL, "_var");
-		
-		$var_val = ${"_var_".$match[1]};
-		
+		$var_val = isset($vars[$match[1]]) ? $vars[$match[1]] : '';
 		$str = str_replace($match[0], $var_val, $str);
 	}
 	
@@ -150,6 +171,8 @@ function url_decrypt($url, $key = false){
 
 // www.youtube.com TO proxy-app.com/index.php?q=encrypt_url(www.youtube.com)
 function proxify_url($url, $base_url = ''){
+	
+	if(empty($url))return '';
 	
 	$url = htmlspecialchars_decode($url);
 	

@@ -1,0 +1,34 @@
+{
+    "name": "nicheoffice/php-web-proxy",
+    "type": "project",
+    "description": "Online web proxy powered by the PHP-Proxy library",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.2",
+        "ext-curl": "*",
+        "athlon1600/php-proxy": "^5.2",
+        "cweagans/composer-patches": "^2.0"
+    },
+    "autoload": {
+        "files": [
+            "helpers.php"
+        ]
+    },
+    "extra": {
+        "patches": {
+            "athlon1600/php-proxy": {
+                "PHP 8.2+ compatibility, XSS and file:// fixes": "patches/php-proxy-php8.patch"
+            }
+        }
+    },
+    "config": {
+        "platform": {
+            "php": "8.2.0"
+        },
+        "optimize-autoloader": true,
+        "sort-packages": true,
+        "allow-plugins": {
+            "cweagans/composer-patches": true
+        }
+    }
+}

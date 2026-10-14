@@ -1,0 +1,220 @@
+diff --git a/src/Event/ProxyEvent.php b/src/Event/ProxyEvent.php
+index 8c707bb..8d313f4 100644
+--- a/src/Event/ProxyEvent.php
++++ b/src/Event/ProxyEvent.php
+@@ -9,7 +9,7 @@ class ProxyEvent implements \ArrayAccess {
+ 		$this->data = $data;
+ 	}
+ 	
+-	public function offsetSet($offset, $value){
++	public function offsetSet(mixed $offset, mixed $value): void {
+ 		
+ 		if(is_null($offset)) {
+ 			$this->data[] = $value;
+@@ -18,15 +18,15 @@ class ProxyEvent implements \ArrayAccess {
+ 		}
+ 	}
+ 	
+-	public function offsetExists($offset){
++	public function offsetExists(mixed $offset): bool {
+ 		return isset($this->data[$offset]);
+ 	}
+ 
+-	public function offsetUnset($offset){
++	public function offsetUnset(mixed $offset): void {
+ 		unset($this->data[$offset]);
+ 	}
+ 
+-	public function offsetGet($offset){
++	public function offsetGet(mixed $offset): mixed {
+ 		return isset($this->data[$offset]) ? $this->data[$offset] : null;
+ 	}
+ 	
+diff --git a/src/Http/Request.php b/src/Http/Request.php
+index 7b3a624..dc68b86 100644
+--- a/src/Http/Request.php
++++ b/src/Http/Request.php
+@@ -324,7 +324,7 @@ class Request {
+ 	public static function createFromGlobals(){
+ 	
+ 		$method = $_SERVER['REQUEST_METHOD'];
+-		$scheme = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']) ? 'https' : 'http';
++		$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+ 		
+ 		$url = $scheme.'://'. $_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI'];
+ 		
+diff --git a/src/Http/Response.php b/src/Http/Response.php
+index e5075ea..fe751b8 100644
+--- a/src/Http/Response.php
++++ b/src/Http/Response.php
+@@ -23,6 +23,7 @@ class Response {
+ 		304 => 'Not Modified',
+ 		305 => 'Use Proxy',
+ 		307 => 'Temporary Redirect',
++		308 => 'Permanent Redirect',
+ 		400 => 'Bad Request',
+ 		401 => 'Unauthorized',
+ 		402 => 'Payment Required',
+@@ -41,7 +42,15 @@ class Response {
+ 		415 => 'Unsupported Media Type',
+ 		416 => 'Requested range not satisfiable',
+ 		417 => 'Expectation Failed',
++		418 => "I'm a teapot",
++		421 => 'Misdirected Request',
++		422 => 'Unprocessable Content',
++		425 => 'Too Early',
++		426 => 'Upgrade Required',
++		428 => 'Precondition Required',
+ 		429 => 'Too Many Requests',
++		431 => 'Request Header Fields Too Large',
++		451 => 'Unavailable For Legal Reasons',
+ 		500 => 'Internal Server Error',
+ 		501 => 'Not Implemented',
+ 		502 => 'Bad Gateway',
+@@ -74,7 +83,7 @@ class Response {
+ 	}
+ 	
+ 	public function getStatusText(){
+-		return $this->statusCodes[$this->getStatusCode()];
++		return isset($this->statusCodes[$this->getStatusCode()]) ? $this->statusCodes[$this->getStatusCode()] : '';
+ 	}
+ 	
+ 	public function setContent($content){
+diff --git a/src/Plugin/AbstractPlugin.php b/src/Plugin/AbstractPlugin.php
+index 605cee3..8fc25d4 100644
+--- a/src/Plugin/AbstractPlugin.php
++++ b/src/Plugin/AbstractPlugin.php
+@@ -45,13 +45,15 @@ abstract class AbstractPlugin {
+ 	}
+ 	
+ 	// dispatch based on filter
+-	final private function route($event_name, ProxyEvent $event){
++	private function route($event_name, ProxyEvent $event){
+ 		$url = $event['request']->getUri();
+ 		
+ 		// url filter provided and current request url does not match it
+ 		if($this->url_pattern){
+-			if(starts_with($this->url_pattern, '/') && preg_match($this->url_pattern, $url) !== 1){
+-				return;
++			if(starts_with($this->url_pattern, '/')){
++				if(preg_match($this->url_pattern, $url) !== 1){
++					return;
++				}
+ 			} else if(stripos($url, $this->url_pattern) === false){
+ 				return;
+ 			}
+diff --git a/src/Plugin/CookiePlugin.php b/src/Plugin/CookiePlugin.php
+index 0d69eff..5b93fa7 100644
+--- a/src/Plugin/CookiePlugin.php
++++ b/src/Plugin/CookiePlugin.php
+@@ -14,7 +14,7 @@ class CookiePlugin extends AbstractPlugin {
+ 		$request = $event['request'];
+ 		
+ 		// cookie sent by the browser to the server
+-		$http_cookie = $request->headers->get("cookie");
++		$http_cookie = (string)$request->headers->get("cookie");
+ 		
+ 		// remove old cookie header and rewrite it
+ 		$request->headers->remove("cookie");
+diff --git a/src/Plugin/HeaderRewritePlugin.php b/src/Plugin/HeaderRewritePlugin.php
+index 9eccdf3..27cb703 100644
+--- a/src/Plugin/HeaderRewritePlugin.php
++++ b/src/Plugin/HeaderRewritePlugin.php
+@@ -53,7 +53,7 @@ class HeaderRewritePlugin extends AbstractPlugin {
+ 		if(!$response->headers->has('content-disposition')){
+ 			
+ 			$url_path = parse_url($request_url, PHP_URL_PATH);
+-			$filename = basename($url_path);
++			$filename = basename((string)$url_path);
+ 			
+ 			$response->headers->set('Content-Disposition', 'filename="'.$filename.'"');
+ 		}
+diff --git a/src/Plugin/ProxifyPlugin.php b/src/Plugin/ProxifyPlugin.php
+index 3165428..878384c 100644
+--- a/src/Plugin/ProxifyPlugin.php
++++ b/src/Plugin/ProxifyPlugin.php
+@@ -143,7 +143,7 @@ class ProxifyPlugin extends AbstractPlugin {
+ 		$url_host = parse_url($this->base_url, PHP_URL_HOST);
+ 		
+ 		$response = $event['response'];
+-		$content_type = $response->headers->get('content-type');
++		$content_type = clean_content_type($response->headers->get('content-type'));
+ 		
+ 		$str = $response->getContent();
+ 		
+@@ -156,7 +156,7 @@ class ProxifyPlugin extends AbstractPlugin {
+ 		// remove JS from urls
+ 		$js_remove = (array)Config::get('js_remove');
+ 		foreach($js_remove as $pattern){
+-			if(strpos($url_host, $pattern) !== false){
++			if($url_host && strpos($url_host, $pattern) !== false){
+ 				$str = Html::remove_scripts($str);
+ 			}
+ 		}
+diff --git a/src/Proxy.php b/src/Proxy.php
+index 152b256..c16fcb4 100644
+--- a/src/Proxy.php
++++ b/src/Proxy.php
+@@ -135,7 +135,11 @@ class Proxy {
+ 			
+ 			// we will take care of redirects
+ 			CURLOPT_FOLLOWLOCATION	=> false,
+-			CURLOPT_AUTOREFERER		=> false
++			CURLOPT_AUTOREFERER		=> false,
++			
++			// only ever speak HTTP(S)
++			CURLOPT_PROTOCOLS		=> CURLPROTO_HTTP | CURLPROTO_HTTPS,
++			CURLOPT_REDIR_PROTOCOLS	=> CURLPROTO_HTTP | CURLPROTO_HTTPS
+ 		);
+ 		
+ 		// this is probably a good place to add custom curl options that way other critical options below would overwrite that
+diff --git a/src/helpers.php b/src/helpers.php
+index 1778c28..1bbc437 100644
+--- a/src/helpers.php
++++ b/src/helpers.php
+@@ -4,7 +4,7 @@ use Proxy\Config;
+ 
+ // strip away extra parameters text/html; charset=UTF-8
+ function clean_content_type($content_type){
+-	return trim(preg_replace('@;.*@', '', $content_type));
++	return trim(preg_replace('@;.*@', '', (string)$content_type));
+ }
+ 
+ 
+@@ -78,7 +78,7 @@ function str_rot_pass($str, $key, $decrypt = false){
+ 			$ascii = ord($str[$i]) + ord($key[$i % $key_len]);
+ 		}
+ 	
+-		$result[$i] = chr($ascii);
++		$result[$i] = chr((($ascii % 256) + 256) % 256);
+ 	}
+ 	
+ 	return $result;
+@@ -89,7 +89,7 @@ function app_url(){
+ 		return Config::get('app_url');
+ 	}
+ 	else{
+-		return (!empty($_SERVER['HTTPS']) ? 'https://' : 'http://').$_SERVER['HTTP_HOST'].$_SERVER['PHP_SELF'];
++		return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https://' : 'http://').$_SERVER['HTTP_HOST'].$_SERVER['SCRIPT_NAME'];
+ 	}
+ }
+ 
+@@ -97,8 +97,7 @@ function render_string($str, $vars = array()){
+ 	preg_match_all('@{([a-z0-9_]+)}@s', $str, $matches, PREG_SET_ORDER);
+ 	
+ 	foreach($matches as $match){
+-		extract($vars, EXTR_PREFIX_ALL, "_var");
+-		$var_val = ${"_var_".$match[1]};
++		$var_val = isset($vars[$match[1]]) ? $vars[$match[1]] : '';
+ 		$str = str_replace($match[0], $var_val, $str);
+ 	}
+ 	
+@@ -173,6 +172,8 @@ function url_decrypt($url, $key = false){
+ // www.youtube.com TO proxy-app.com/index.php?q=encrypt_url(www.youtube.com)
+ function proxify_url($url, $base_url = ''){
+ 	
++	if(empty($url))return '';
++	
+ 	$url = htmlspecialchars_decode($url);
+ 	
+ 	if($base_url){

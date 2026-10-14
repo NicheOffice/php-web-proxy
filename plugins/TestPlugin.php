@@ -21,5 +21,3 @@ class TestPlugin extends AbstractPlugin {
 		// fired after the full response=headers+body has been read - will only be called on "non-streaming" responses
 	}
 }
-
-?>

@@ -14,7 +14,7 @@ class CookiePlugin extends AbstractPlugin {
 		$request = $event['request'];
 		
 		// cookie sent by the browser to the server
-		$http_cookie = $request->headers->get("cookie");
+		$http_cookie = (string)$request->headers->get("cookie");
 		
 		// remove old cookie header and rewrite it
 		$request->headers->remove("cookie");

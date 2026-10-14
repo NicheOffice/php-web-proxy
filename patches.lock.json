@@ -1,0 +1,17 @@
+{
+    "_hash": "0f50fd037b45a7797070735efee9bf12e2739db588f1ed4215749cc8a03e3abf",
+    "patches": {
+        "athlon1600/php-proxy": [
+            {
+                "package": "athlon1600/php-proxy",
+                "description": "PHP 8.2+ compatibility, XSS and file:// fixes",
+                "url": "patches/php-proxy-php8.patch",
+                "sha256": "b0e8131e3deb9105ffca0fa2778f1e231268626adf7307d20bb890a2cbbf2264",
+                "depth": 1,
+                "extra": {
+                    "provenance": "root"
+                }
+            }
+        ]
+    }
+}
